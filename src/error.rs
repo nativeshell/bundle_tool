@@ -1,7 +1,5 @@
 use std::{fmt::Display, io, path::PathBuf, process::ExitStatus};
 
-use crate::macos_bundle::ModulePath;
-
 pub type ToolResult<T> = Result<T, ToolError>;
 
 #[derive(Debug)]
@@ -40,7 +38,7 @@ pub enum ToolError {
         source: io::Error,
     },
     PathResolveError {
-        path: ModulePath,
+        path: String,
         rpaths: Vec<PathBuf>,
     },
     OtherError(String),

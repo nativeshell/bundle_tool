@@ -1,12 +1,12 @@
 #[allow(dead_code)]
 mod error;
-mod macos_bundle;
+mod macos;
 mod utils;
 
 use std::path::PathBuf;
 
 use clap::{AppSettings, Clap};
-use macos_bundle::MacOSBundleSelfContained;
+use macos::bundle_self_contained::MacOSBundleSelfContained;
 use simple_logger::SimpleLogger;
 
 #[derive(Clap)]

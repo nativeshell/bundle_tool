@@ -325,7 +325,7 @@ impl<'a> PathResolver<'a> {
                 }
             }
             Err(ToolError::PathResolveError {
-                path: path.clone(),
+                path: format!("{:?}", path),
                 rpaths: self.rpaths.iter().map(|p| p.into()).collect(),
             })
         }
