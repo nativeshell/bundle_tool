@@ -1,0 +1,15 @@
+[package]
+name = "bundle_tool"
+version = "0.1.0"
+authors = ["Matej Knopp <matej.knopp@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "3.0.0-beta.2"
+log = "0.4"
+simple_logger = { version = "1.11.0", default-features = false, features = ["colored"] }
+is_executable = "1.0.1"
+pathdiff = "0.2.0"
+
