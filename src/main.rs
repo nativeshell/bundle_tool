@@ -3,10 +3,7 @@ mod error;
 mod macos;
 mod utils;
 
-use std::path::PathBuf;
-
 use clap::{AppSettings, Clap};
-use macos::bundle_self_contained::MacOSBundleSelfContained;
 use simple_logger::SimpleLogger;
 
 #[derive(Clap)]
@@ -21,21 +18,14 @@ struct Opts {
 }
 
 #[derive(Clap)]
-pub struct MacOSBundleOptions {
-    /// Delete bundle in target directory (out-dir/BundleName.app) if already exists
-    #[clap(long)]
-    delete_existing_bundle: bool,
-    /// Path to bundle produced by NativeShell
-    source_path: PathBuf,
-    /// Output directory
-    out_dir: PathBuf,
-}
-
-#[derive(Clap)]
 enum SubCommand {
     /// Creates a self-contained macOS bundle
     #[clap(name = "macos_bundle")]
-    MacOSBundleSelfContained(MacOSBundleOptions),
+    MacOSBundle(macos::bundle::Options),
+
+    /// Code-signs a self-contained macOS bundle
+    #[clap(name = "macos_codesign")]
+    MacOSCodesign(macos::codesign::Options),
 }
 
 fn main() {
@@ -50,9 +40,8 @@ fn main() {
     SimpleLogger::new().with_level(log_level).init().unwrap();
 
     let res = match opts.subcmd {
-        SubCommand::MacOSBundleSelfContained(options) => {
-            MacOSBundleSelfContained::new(options).perform()
-        }
+        SubCommand::MacOSBundle(options) => macos::bundle::SelfContained::new(options).perform(),
+        SubCommand::MacOSCodesign(options) => macos::codesign::CodeSign::new(options).perform(),
     };
 
     if let Err(error) = res {

@@ -1,30 +1,40 @@
 use std::{
     collections::HashMap,
     fmt::Display,
-    fs::{self, File},
-    io::Read,
+    fs::{self},
     path::{Path, PathBuf},
     process::Command,
 };
 
-use is_executable::IsExecutable;
 use log::{debug, trace};
 
 use crate::{
     error::{FileOperation, IOResultExt, ToolError, ToolResult},
     utils::{copy, is_same, run_command},
-    MacOSBundleOptions,
 };
 
-pub struct MacOSBundleSelfContained {
-    options: MacOSBundleOptions,
+use super::utils::is_executable_binary;
+
+#[derive(clap::Clap)]
+pub struct Options {
+    /// Delete bundle in target directory (out-dir/BundleName.app) if already exists
+    #[clap(long)]
+    delete_existing_bundle: bool,
+    /// Path to bundle produced by NativeShell
+    source_path: PathBuf,
+    /// Output directory
+    out_dir: PathBuf,
+}
+
+pub struct SelfContained {
+    options: Options,
     out_path: PathBuf,
     executables: Vec<PathBuf>,
     processed_libraries: HashMap<ModulePath, PathBuf>,
 }
 
-impl MacOSBundleSelfContained {
-    pub fn new(options: MacOSBundleOptions) -> Self {
+impl SelfContained {
+    pub fn new(options: Options) -> Self {
         Self {
             options,
             out_path: PathBuf::new(),
@@ -398,20 +408,6 @@ fn extract_module_path(line: String) -> ToolResult<ModulePath> {
             "Malformed otool -L output: {}",
             line
         ))),
-    }
-}
-
-fn is_executable_binary(path: &Path) -> ToolResult<bool> {
-    if path.is_executable() {
-        // Check for shebang
-        let mut f = File::open(path).wrap_error(FileOperation::Open, || path.into())?;
-        let mut start = [0; 2];
-        let num_read = f
-            .read(&mut start)
-            .wrap_error(FileOperation::Read, || path.into())?;
-        Ok(num_read == 2 && start[0] != b'#' && start[1] != b'!')
-    } else {
-        Ok(false)
     }
 }
 
