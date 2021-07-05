@@ -33,6 +33,35 @@ impl MacOSBundleSelfContained {
         }
     }
 
+    //
+    // Creates a self-contained version of given bundle.
+    //
+    // The rough idea is a s follows:
+    //
+    // 1. Recursively traverse files and folders in entire bundle and:
+    //   If this is a Frameworks folder (either in main bundle or sub-bundles), skip it.
+    //   If this is a symlink, preserve it if it is relative within bundle, resolve if it
+    //     points out of bundle.
+    //   If this is a folder, create matching one in target bundle.
+    //   If this is a file, copy it.
+    //
+    // 2. For each copied executable:
+    //   Resolve dependencies (dylibs and frameworks). For each dependency:
+    //     If this is a system dependency do nothing.
+    //     For local dependencies:
+    //       If already processed, ignore.
+    //       If dependency with same name but different content was already processed, fail.
+    //         TODO(knopp): In future there might be a need for multiple Flutter apps in same bundle.
+    //                      This would require additional work to ensure that the App.framework is kept
+    //                      relative to containing bundle and not moved to top level bundle.
+    //       Copy the dependency (either dylib or surrounding framework)
+    //         to top level bundle Contents/Frameworks folder
+    //       Change install name to @rpath/[dependency name]
+    //       Change reference name in parent module to @rpath/[dependency name]
+    //       Resolve all dependencies and continue recursively.
+    //    If executable has any local dependency, add rpath referring to main bundle
+    //      Frameworks folder.
+    //
     pub fn perform(mut self) -> ToolResult<()> {
         if !self.options.source_path.is_dir() {
             return Err(ToolError::OtherError(
