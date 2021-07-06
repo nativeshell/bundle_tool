@@ -26,6 +26,9 @@ enum SubCommand {
     /// Code-signs a self-contained macOS bundle
     #[clap(name = "macos_codesign")]
     MacOSCodesign(macos::codesign::Options),
+
+    #[clap(name = "macos_notarize")]
+    MacOSNotarize(macos::notarize::Options),
 }
 
 fn main() {
@@ -42,6 +45,7 @@ fn main() {
     let res = match opts.subcmd {
         SubCommand::MacOSBundle(options) => macos::bundle::SelfContained::new(options).perform(),
         SubCommand::MacOSCodesign(options) => macos::codesign::CodeSign::new(options).perform(),
+        SubCommand::MacOSNotarize(options) => macos::notarize::Notarize::new(options).perform(),
     };
 
     if let Err(error) = res {

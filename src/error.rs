@@ -41,10 +41,15 @@ pub enum ToolError {
         path: String,
         rpaths: Vec<PathBuf>,
     },
+    PlistError {
+        path: Option<PathBuf>,
+        error: plist::Error,
+    },
+    NotarizationFailure {
+        log_file_url: Option<String>,
+    },
     OtherError(String),
 }
-
-pub type BuildResult<T> = Result<T, ToolError>;
 
 impl Display for ToolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -88,6 +93,16 @@ impl Display for ToolError {
             ToolError::PathResolveError { path, rpaths } => {
                 write!(f, "Failed to resolve path: {} (rpaths: {:?}", path, rpaths)
             }
+            ToolError::PlistError { path, error } => {
+                write!(f, "PlistError: {} (Path:{:?})", error, path)
+            }
+            ToolError::NotarizationFailure { log_file_url } => {
+                write!(
+                    f,
+                    "Notarizaiton failed: {}",
+                    log_file_url.as_ref().unwrap_or(&"No long available".into())
+                )
+            }
         }
     }
 }
@@ -95,7 +110,7 @@ impl Display for ToolError {
 impl std::error::Error for ToolError {}
 
 pub(super) trait IOResultExt<T> {
-    fn wrap_error<F>(self, operation: FileOperation, path: F) -> BuildResult<T>
+    fn wrap_error<F>(self, operation: FileOperation, path: F) -> ToolResult<T>
     where
         F: FnOnce() -> PathBuf;
     fn wrap_error_with_src<F, G>(
@@ -103,14 +118,20 @@ pub(super) trait IOResultExt<T> {
         operation: FileOperation,
         path: F,
         source_path: G,
-    ) -> BuildResult<T>
+    ) -> ToolResult<T>
     where
         F: FnOnce() -> PathBuf,
         G: FnOnce() -> PathBuf;
 }
 
+pub(super) trait PlistResultExt<T> {
+    fn wrap_error<F>(self, path: F) -> ToolResult<T>
+    where
+        F: FnOnce() -> Option<PathBuf>;
+}
+
 impl<T> IOResultExt<T> for io::Result<T> {
-    fn wrap_error<F>(self, operation: FileOperation, path: F) -> BuildResult<T>
+    fn wrap_error<F>(self, operation: FileOperation, path: F) -> ToolResult<T>
     where
         F: FnOnce() -> PathBuf,
     {
@@ -127,7 +148,7 @@ impl<T> IOResultExt<T> for io::Result<T> {
         operation: FileOperation,
         path: F,
         source_path: G,
-    ) -> BuildResult<T>
+    ) -> ToolResult<T>
     where
         F: FnOnce() -> PathBuf,
         G: FnOnce() -> PathBuf,
@@ -137,6 +158,18 @@ impl<T> IOResultExt<T> for io::Result<T> {
             path: path(),
             source_path: Some(source_path()),
             source: e,
+        })
+    }
+}
+
+impl<T> PlistResultExt<T> for Result<T, plist::Error> {
+    fn wrap_error<F>(self, path: F) -> ToolResult<T>
+    where
+        F: FnOnce() -> Option<PathBuf>,
+    {
+        self.map_err(|e| ToolError::PlistError {
+            path: path(),
+            error: e,
         })
     }
 }
