@@ -203,7 +203,7 @@ impl SelfContained {
                     .unwrap();
             let mut cmd = Command::new("install_name_tool");
             cmd.arg("-add_rpath")
-                .arg(rpath)
+                .arg(Path::new("@executable_path").join(rpath))
                 .arg(&target_executable_path);
             run_command(cmd, "install_name_tool")?;
         }
