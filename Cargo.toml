@@ -1,6 +1,6 @@
 [package]
 name = "bundle_tool"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Matej Knopp <matej.knopp@gmail.com>"]
 edition = "2018"
 license = "MIT"
