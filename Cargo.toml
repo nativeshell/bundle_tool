@@ -1,12 +1,16 @@
 [package]
 name = "bundle_tool"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Matej Knopp <matej.knopp@gmail.com>"]
 edition = "2018"
 license = "MIT"
 description = "Tool for bundling application for distribution."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+path = "src/main.rs"
+name = "cargo-bundle-tool"
 
 [dependencies]
 clap = "3.0.0-beta.2"
