@@ -3,6 +3,8 @@ name = "bundle_tool"
 version = "0.1.0"
 authors = ["Matej Knopp <matej.knopp@gmail.com>"]
 edition = "2018"
+license = "MIT"
+description = "Tool for bundling application for distribution."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
