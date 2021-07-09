@@ -20,19 +20,28 @@ struct Opts {
 #[derive(Clap)]
 enum SubCommand {
     /// Creates a self-contained macOS bundle
-    #[clap(name = "macos_bundle")]
+    #[clap(name = "macos-bundle")]
     MacOSBundle(macos::bundle::Options),
 
     /// Code-signs a self-contained macOS bundle
-    #[clap(name = "macos_codesign")]
+    #[clap(name = "macos-codesign")]
     MacOSCodesign(macos::codesign::Options),
 
-    #[clap(name = "macos_notarize")]
+    #[clap(name = "macos-notarize")]
     MacOSNotarize(macos::notarize::Options),
 }
 
 fn main() {
-    let opts: Opts = Opts::parse();
+    let args = std::env::args_os();
+    // when running from cargo filter out the bundle-tool argument
+    let args = args.enumerate().filter_map(|(x, y)| {
+        if x == 1 && y.to_string_lossy() == "bundle-tool" {
+            None
+        } else {
+            Some(y)
+        }
+    });
+    let opts: Opts = Opts::parse_from(args);
 
     let log_level = match opts.verbose {
         0 => log::LevelFilter::Info,
