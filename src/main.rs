@@ -7,7 +7,7 @@ use clap::{AppSettings, Clap};
 use simple_logger::SimpleLogger;
 
 #[derive(Clap)]
-#[clap(version = "1.0", author = "Matej Knopp")]
+#[clap(version = env!("CARGO_PKG_VERSION"), author = "Matej Knopp")]
 #[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
     /// A level of verbosity, and can be used multiple times
@@ -41,7 +41,7 @@ fn main() {
             Some(y)
         }
     });
-    let opts: Opts = Opts::parse_from(args);
+    let opts = Opts::parse_from(args);
 
     let log_level = match opts.verbose {
         0 => log::LevelFilter::Info,
