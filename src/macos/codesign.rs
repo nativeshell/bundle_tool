@@ -42,10 +42,10 @@ impl CodeSign {
 
     pub fn perform(mut self) -> ToolResult<()> {
         let bundle_path = self.options.bundle_path.clone();
-        self.process_bundle(&bundle_path)
+        self.process_app_bundle(&bundle_path)
     }
 
-    fn process_bundle(&mut self, path: &Path) -> ToolResult<()> {
+    fn process_app_bundle(&mut self, path: &Path) -> ToolResult<()> {
         if !is_app_bundle(path) {
             return Err(ToolError::OtherError(format!(
                 "Path \"{:?}\" is not an app bundle",
@@ -53,7 +53,19 @@ impl CodeSign {
             )));
         }
         self.process_folder(path)?;
-        self.codesign(path)?;
+        self.codesign(path, true)?;
+        Ok(())
+    }
+
+    fn process_framework_bundle(&mut self, path: &Path) -> ToolResult<()> {
+        if !is_framework_bundle(path) {
+            return Err(ToolError::OtherError(format!(
+                "Path \"{:?}\" is not a framework bundle",
+                path,
+            )));
+        }
+        self.process_folder(path)?;
+        self.codesign(path, false)?;
         Ok(())
     }
 
@@ -65,15 +77,11 @@ impl CodeSign {
             let entry = entry.wrap_error(FileOperation::Read, || path.into())?;
             let path = &entry.path();
 
-            // Ignore binaries in Contents/MacOS and Frameworks, those will be codesigned
-            // when codesigning the bundle
-            // if path.ends_with("Contents/MacOS") || path.ends_with("Contents/Frameworks") {
-            // continue;
-            // }
-
             if path.is_dir() {
                 if is_app_bundle(path) {
-                    self.process_bundle(path)?;
+                    self.process_app_bundle(path)?;
+                } else if is_framework_bundle(path) {
+                    self.process_framework_bundle(path)?;
                 } else {
                     self.process_folder(path)?;
                 }
@@ -85,14 +93,14 @@ impl CodeSign {
                 if is_framework_dylib(path) {
                     continue;
                 }
-                self.codesign(path)?;
+                self.codesign(path, false)?;
             }
         }
 
         Ok(())
     }
 
-    fn codesign(&mut self, path: &Path) -> ToolResult<()> {
+    fn codesign(&mut self, path: &Path, is_app_bundle: bool) -> ToolResult<()> {
         let resolved = path
             .canonicalize()
             .wrap_error(FileOperation::Canonicalize, || path.into())?;
@@ -104,14 +112,17 @@ impl CodeSign {
 
         debug!("Codesigning {:?}", resolved);
         let mut command = Command::new("codesign");
-        command
+        command //
             .arg("-o")
             .arg("runtime")
-            .arg("--timestamp")
-            .arg("--entitlements")
-            .arg(&self.options.entitlements)
+            .arg("--timestamp");
+        if is_app_bundle {
+            command
+                .arg("--entitlements")
+                .arg(&self.options.entitlements);
+        }
+        command
             .arg("-f")
-            .arg("--deep")
             .arg("-s")
             .arg(&self.options.identity)
             .arg(&resolved);
@@ -173,4 +184,8 @@ fn is_bundle_executable(path: &Path) -> bool {
 fn is_app_bundle(path: &Path) -> bool {
     path.extension().map(|s| s.to_string_lossy()) == Some("app".into())
         && path.join("Contents/Info.plist").is_file()
+}
+
+fn is_framework_bundle(path: &Path) -> bool {
+    path.extension().map(|s| s.to_string_lossy()) == Some("framework".into())
 }
