@@ -7,7 +7,7 @@ use std::{
 use log::debug;
 
 use crate::{
-    error::{FileOperation, IOResultExt, ToolError, ToolResult},
+    error::{FileOperation, IOResultExt, PlistResultExt, ToolError, ToolResult},
     utils::run_command,
 };
 
@@ -87,7 +87,7 @@ impl CodeSign {
                 }
             } else if is_executable_binary(path)? {
                 // ignore bundle executables and framework dylibs
-                if is_bundle_executable(path) {
+                if is_bundle_executable(path)? {
                     continue;
                 }
                 if is_framework_dylib(path) {
@@ -166,19 +166,35 @@ fn is_framework_dylib(path: &Path) -> bool {
     is_in_framework(path)
 }
 
-fn is_bundle_executable(path: &Path) -> bool {
+fn is_bundle_executable(path: &Path) -> ToolResult<bool> {
     if let Some(parent) = path.parent() {
         if parent.file_name().unwrap() == "MacOS" {
             if let Some(parent) = parent.parent() {
                 if parent.file_name().unwrap() == "Contents" {
+                    let info_plist = parent.join("Info.plist");
+                    let bundle_executable = get_bundle_executable(&info_plist)?;
+                    if bundle_executable != path.file_name().unwrap().to_string_lossy() {
+                        return Ok(false);
+                    }
                     if let Some(parent) = parent.parent() {
-                        return is_app_bundle(parent);
+                        return Ok(is_app_bundle(parent));
                     }
                 }
             }
         }
     }
-    false
+    Ok(false)
+}
+
+fn get_bundle_executable(info_plist: &Path) -> ToolResult<String> {
+    let plist = plist::Value::from_file(&info_plist).wrap_error(|| Some(info_plist.into()))?;
+    if let plist::Value::Dictionary(plist) = plist {
+        let identifier = plist.get("CFBundleExecutable");
+        if let Some(plist::Value::String(identifier)) = identifier {
+            return Ok(identifier.into());
+        }
+    }
+    Err(ToolError::OtherError("Malformed info.plist".into()))
 }
 
 fn is_app_bundle(path: &Path) -> bool {
