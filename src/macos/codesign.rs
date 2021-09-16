@@ -163,7 +163,7 @@ fn is_framework_dylib(path: &Path) -> bool {
             }
         }
     }
-    is_in_framework(path)
+    false
 }
 
 fn is_bundle_executable(path: &Path) -> ToolResult<bool> {
