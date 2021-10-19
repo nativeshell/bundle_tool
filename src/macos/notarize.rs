@@ -15,7 +15,7 @@ use crate::{
     utils::run_command,
 };
 
-#[derive(clap::Clap)]
+#[derive(clap::Parser)]
 pub struct Options {
     /// Path to self-contained code-signed bundle produced by
     /// the macos_bundle and macos_codesign commands

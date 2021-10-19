@@ -13,7 +13,7 @@ use crate::{
 
 use super::utils::is_executable_binary;
 
-#[derive(clap::Clap)]
+#[derive(clap::Parser)]
 pub struct Options {
     /// Path to self-contained bundle produced by the macos_bundle command
     bundle_path: PathBuf,

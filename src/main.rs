@@ -3,12 +3,11 @@ mod error;
 mod macos;
 mod utils;
 
-use clap::{AppSettings, Clap};
+use clap::Parser;
 use simple_logger::SimpleLogger;
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"), author = "Matej Knopp")]
-#[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
     /// A level of verbosity, and can be used multiple times
     #[clap(short = 'v', long = "verbose", parse(from_occurrences))]
@@ -17,7 +16,7 @@ struct Opts {
     subcmd: SubCommand,
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 enum SubCommand {
     /// Creates a self-contained macOS bundle
     #[clap(name = "macos-bundle")]

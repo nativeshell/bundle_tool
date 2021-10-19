@@ -15,7 +15,7 @@ use crate::{
 
 use super::utils::is_executable_binary;
 
-#[derive(clap::Clap)]
+#[derive(clap::Parser)]
 pub struct Options {
     /// Delete bundle in target directory (out-dir/BundleName.app) if already exists
     #[clap(long)]
