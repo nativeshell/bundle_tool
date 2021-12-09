@@ -13,7 +13,7 @@ path = "src/main.rs"
 name = "cargo-bundle-tool"
 
 [dependencies]
-clap = "3.0.0-beta.5"
+clap = { version = "3.0.0-rc.0", features = ["derive"] }
 log = "0.4"
 simple_logger = { version = "1.11.0", default-features = false, features = ["colored"] }
 is_executable = "1.0.1"
