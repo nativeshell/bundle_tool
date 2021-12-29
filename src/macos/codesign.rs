@@ -18,9 +18,10 @@ pub struct Options {
     /// Path to self-contained bundle produced by the macos_bundle command
     bundle_path: PathBuf,
 
-    /// Path to the entitlements file
+    /// Path to the entitlements file. Multiple values in form of
+    /// <bundle-id>:<path> are allowed.
     #[clap(long)]
-    entitlements: PathBuf,
+    entitlements: Vec<String>,
 
     /// Identity used during the codesigning process
     #[clap(long)]
@@ -57,18 +58,6 @@ impl CodeSign {
         Ok(())
     }
 
-    fn process_framework_bundle(&mut self, path: &Path) -> ToolResult<()> {
-        if !is_framework_bundle(path) {
-            return Err(ToolError::OtherError(format!(
-                "Path \"{:?}\" is not a framework bundle",
-                path,
-            )));
-        }
-        self.process_folder(path)?;
-        self.codesign(path, false)?;
-        Ok(())
-    }
-
     fn process_folder(&mut self, path: &Path) -> ToolResult<()> {
         for entry in path
             .read_dir()
@@ -80,17 +69,12 @@ impl CodeSign {
             if path.is_dir() {
                 if is_app_bundle(path) {
                     self.process_app_bundle(path)?;
-                } else if is_framework_bundle(path) {
-                    self.process_framework_bundle(path)?;
                 } else {
                     self.process_folder(path)?;
                 }
             } else if is_executable_binary(path)? {
-                // ignore bundle executables and framework dylibs
+                // ignore bundle executables
                 if is_bundle_executable(path)? {
-                    continue;
-                }
-                if is_framework_dylib(path) {
                     continue;
                 }
                 self.codesign(path, false)?;
@@ -98,6 +82,23 @@ impl CodeSign {
         }
 
         Ok(())
+    }
+
+    fn entitlement_for_bundle(&self, bundle_path: &Path) -> ToolResult<Option<String>> {
+        let bundle_prefix = get_bundle_identifier(bundle_path)? + ":";
+        // Try to find entitlement for this exact bundle
+        for e in &self.options.entitlements {
+            if let Some(suffix) = e.strip_prefix(&bundle_prefix) {
+                return Ok(Some(suffix.into()));
+            }
+        }
+        // Fallback - any entitlement without bundle id
+        for e in &self.options.entitlements {
+            if !e.contains(':') {
+                return Ok(Some(e.into()));
+            }
+        }
+        Ok(None)
     }
 
     fn codesign(&mut self, path: &Path, is_app_bundle: bool) -> ToolResult<()> {
@@ -117,9 +118,10 @@ impl CodeSign {
             .arg("runtime")
             .arg("--timestamp");
         if is_app_bundle {
-            command
-                .arg("--entitlements")
-                .arg(&self.options.entitlements);
+            let entitlements = self.entitlement_for_bundle(&resolved)?;
+            if let Some(entitlements) = entitlements {
+                command.arg("--entitlements").arg(entitlements);
+            }
         }
         command
             .arg("-f")
@@ -132,38 +134,6 @@ impl CodeSign {
 
         Ok(())
     }
-}
-
-fn is_in_framework(path: &Path) -> bool {
-    path.parent().map(|p| p.ends_with("Contents/Frameworks")) == Some(true)
-}
-
-fn is_framework_dylib(path: &Path) -> bool {
-    if let Some(parent) = path.parent() {
-        if parent
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .ends_with(".framework")
-        {
-            return is_in_framework(parent);
-        }
-        if let Some(parent) = parent.parent() {
-            if parent.file_name().unwrap() == "Versions" {
-                if let Some(parent) = parent.parent() {
-                    if parent
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy()
-                        .ends_with(".framework")
-                    {
-                        return is_in_framework(parent);
-                    }
-                }
-            }
-        }
-    }
-    false
 }
 
 fn is_bundle_executable(path: &Path) -> ToolResult<bool> {
@@ -189,7 +159,19 @@ fn is_bundle_executable(path: &Path) -> ToolResult<bool> {
 fn get_bundle_executable(info_plist: &Path) -> ToolResult<String> {
     let plist = plist::Value::from_file(&info_plist).wrap_error(|| Some(info_plist.into()))?;
     if let plist::Value::Dictionary(plist) = plist {
-        let identifier = plist.get("CFBundleExecutable");
+        let executable = plist.get("CFBundleExecutable");
+        if let Some(plist::Value::String(identifier)) = executable {
+            return Ok(identifier.into());
+        }
+    }
+    Err(ToolError::OtherError("Malformed info.plist".into()))
+}
+
+fn get_bundle_identifier(bundle_path: &Path) -> ToolResult<String> {
+    let info_plist = bundle_path.join("Contents/Info.plist");
+    let plist = plist::Value::from_file(&info_plist).wrap_error(|| Some(info_plist.into()))?;
+    if let plist::Value::Dictionary(plist) = plist {
+        let identifier = plist.get("CFBundleIdentifier");
         if let Some(plist::Value::String(identifier)) = identifier {
             return Ok(identifier.into());
         }
@@ -200,8 +182,4 @@ fn get_bundle_executable(info_plist: &Path) -> ToolResult<String> {
 fn is_app_bundle(path: &Path) -> bool {
     path.extension().map(|s| s.to_string_lossy()) == Some("app".into())
         && path.join("Contents/Info.plist").is_file()
-}
-
-fn is_framework_bundle(path: &Path) -> bool {
-    path.extension().map(|s| s.to_string_lossy()) == Some("framework".into())
 }
