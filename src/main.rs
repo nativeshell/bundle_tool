@@ -29,6 +29,9 @@ enum SubCommand {
 
     #[clap(name = "macos-notarize")]
     MacOSNotarize(macos::notarize::Options),
+
+    #[clap(name = "macos-universal")]
+    MacOSUniversal(macos::universal::Options),
 }
 
 fn main() {
@@ -55,6 +58,7 @@ fn main() {
         SubCommand::MacOSBundle(options) => macos::bundle::SelfContained::new(options).perform(),
         SubCommand::MacOSCodesign(options) => macos::codesign::CodeSign::new(options).perform(),
         SubCommand::MacOSNotarize(options) => macos::notarize::Notarize::new(options).perform(),
+        SubCommand::MacOSUniversal(options) => macos::universal::Universal::new(options).perform(),
     };
 
     if let Err(error) = res {

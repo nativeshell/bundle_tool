@@ -48,6 +48,7 @@ pub enum ToolError {
     NotarizationFailure {
         log_file_url: Option<String>,
     },
+    BundlesNotIdentical,
     OtherError(String),
 }
 
@@ -102,6 +103,9 @@ impl Display for ToolError {
                     "Notarizaiton failed: {}",
                     log_file_url.as_ref().unwrap_or(&"No long available".into())
                 )
+            }
+            ToolError::BundlesNotIdentical => {
+                write!(f, "Bundles are not identical")
             }
         }
     }
