@@ -157,7 +157,7 @@ fn is_bundle_executable(path: &Path) -> ToolResult<bool> {
 }
 
 fn get_bundle_executable(info_plist: &Path) -> ToolResult<String> {
-    let plist = plist::Value::from_file(&info_plist).wrap_error(|| Some(info_plist.into()))?;
+    let plist = plist::Value::from_file(info_plist).wrap_error(|| Some(info_plist.into()))?;
     if let plist::Value::Dictionary(plist) = plist {
         let executable = plist.get("CFBundleExecutable");
         if let Some(plist::Value::String(identifier)) = executable {
@@ -169,7 +169,7 @@ fn get_bundle_executable(info_plist: &Path) -> ToolResult<String> {
 
 fn get_bundle_identifier(bundle_path: &Path) -> ToolResult<String> {
     let info_plist = bundle_path.join("Contents/Info.plist");
-    let plist = plist::Value::from_file(&info_plist).wrap_error(|| Some(info_plist.into()))?;
+    let plist = plist::Value::from_file(&info_plist).wrap_error(|| Some(info_plist))?;
     if let plist::Value::Dictionary(plist) = plist {
         let identifier = plist.get("CFBundleIdentifier");
         if let Some(plist::Value::String(identifier)) = identifier {

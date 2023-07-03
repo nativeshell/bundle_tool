@@ -17,6 +17,7 @@ struct Opts {
 }
 
 #[derive(Parser)]
+#[allow(clippy::enum_variant_names)]
 enum SubCommand {
     /// Creates a self-contained macOS bundle
     #[clap(name = "macos-bundle")]

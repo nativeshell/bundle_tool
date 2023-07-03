@@ -25,23 +25,23 @@ pub enum FileOperation {
 }
 #[derive(Debug)]
 pub enum ToolError {
-    ToolError {
+    Command {
         command: String,
         status: ExitStatus,
         stderr: String,
         stdout: String,
     },
-    FileOperationError {
+    FileOperation {
         operation: FileOperation,
         path: PathBuf,
         source_path: Option<PathBuf>,
         source: io::Error,
     },
-    PathResolveError {
+    PathResolve {
         path: String,
         rpaths: Vec<PathBuf>,
     },
-    PlistError {
+    Plist {
         path: Option<PathBuf>,
         error: plist::Error,
     },
@@ -54,7 +54,7 @@ pub enum ToolError {
 impl Display for ToolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ToolError::ToolError {
+            ToolError::Command {
                 command,
                 status,
                 stderr,
@@ -66,7 +66,7 @@ impl Display for ToolError {
                     status, command, stderr, stdout
                 )
             }
-            ToolError::FileOperationError {
+            ToolError::FileOperation {
                 operation,
                 path,
                 source_path,
@@ -90,10 +90,10 @@ impl Display for ToolError {
             ToolError::OtherError(err) => {
                 write!(f, "{}", err)
             }
-            ToolError::PathResolveError { path, rpaths } => {
+            ToolError::PathResolve { path, rpaths } => {
                 write!(f, "Failed to resolve path: {} (rpaths: {:?}", path, rpaths)
             }
-            ToolError::PlistError { path, error } => {
+            ToolError::Plist { path, error } => {
                 write!(f, "PlistError: {} (Path:{:?})", error, path)
             }
             ToolError::NotarizationFailure { log_file_url } => {
@@ -135,7 +135,7 @@ impl<T> IOResultExt<T> for io::Result<T> {
     where
         F: FnOnce() -> PathBuf,
     {
-        self.map_err(|e| ToolError::FileOperationError {
+        self.map_err(|e| ToolError::FileOperation {
             operation,
             path: path(),
             source_path: None,
@@ -153,7 +153,7 @@ impl<T> IOResultExt<T> for io::Result<T> {
         F: FnOnce() -> PathBuf,
         G: FnOnce() -> PathBuf,
     {
-        self.map_err(|e| ToolError::FileOperationError {
+        self.map_err(|e| ToolError::FileOperation {
             operation,
             path: path(),
             source_path: Some(source_path()),
@@ -167,7 +167,7 @@ impl<T> PlistResultExt<T> for Result<T, plist::Error> {
     where
         F: FnOnce() -> Option<PathBuf>,
     {
-        self.map_err(|e| ToolError::PlistError {
+        self.map_err(|e| ToolError::Plist {
             path: path(),
             error: e,
         })
