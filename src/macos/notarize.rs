@@ -185,7 +185,7 @@ impl Notarize {
         let path = temp_dir.join(rand_string);
         fs::create_dir_all(&path)
             .wrap_error(crate::error::FileOperation::CreateDir, || path.clone())?;
-        return Ok(path);
+        Ok(path)
     }
 
     fn compress_bundle(&self, temp_dir: &Path) -> ToolResult<PathBuf> {

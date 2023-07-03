@@ -14,7 +14,7 @@ pub(super) fn run_command(mut command: Command, command_name: &str) -> ToolResul
         .wrap_error(FileOperation::Command, || command_name.into())?;
 
     if !output.status.success() {
-        Err(ToolError::ToolError {
+        Err(ToolError::Command {
             command: format!("{:?}", command),
             status: output.status,
             stderr: String::from_utf8_lossy(&output.stderr).into(),
@@ -42,7 +42,7 @@ fn diff_files(f1: &mut File, f2: &mut File) -> bool {
                     if f1_read_len == 0 {
                         return true;
                     }
-                    if &buf1[0..f1_read_len] != &buf2[0..f2_read_len] {
+                    if buf1[0..f1_read_len] != buf2[0..f2_read_len] {
                         return false;
                     }
                 }
@@ -86,7 +86,7 @@ pub fn copy_dir(src_dir: &Path, dest_dir: &Path) -> io::Result<()> {
 
 pub fn copy(src: &Path, dest: &Path) -> io::Result<()> {
     if src.is_dir() {
-        copy_dir(src, &dest)?;
+        copy_dir(src, dest)?;
     } else {
         fs::copy(src, dest)?;
     }

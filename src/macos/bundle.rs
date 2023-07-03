@@ -124,7 +124,7 @@ impl SelfContained {
             let meta = entry
                 .path()
                 .symlink_metadata()
-                .wrap_error(FileOperation::MetaData, || entry.path().clone())?;
+                .wrap_error(FileOperation::MetaData, || entry.path())?;
 
             if src_dir.file_name().unwrap() == "Contents" && entry.file_name() == "Frameworks" {
                 // Frameworks are handled separately (while processing binaries)
@@ -157,7 +157,7 @@ impl SelfContained {
             let src_resolved = entry
                 .path()
                 .canonicalize()
-                .wrap_error(FileOperation::Canonicalize, || entry.path().clone())?;
+                .wrap_error(FileOperation::Canonicalize, || entry.path())?;
 
             if src_resolved.is_dir() {
                 fs::create_dir(&dest).wrap_error(FileOperation::CreateDir, || dest.clone())?;
@@ -168,7 +168,7 @@ impl SelfContained {
                 fs::copy(&src_resolved, &dest).wrap_error_with_src(
                     FileOperation::Copy,
                     || dest.clone(),
-                    || entry.path().clone(),
+                    || entry.path(),
                 )?;
                 if !is_executable_binary(&src_resolved)? {
                     debug!("{:?}: copy", entry.path());
@@ -192,7 +192,7 @@ impl SelfContained {
         let path_resolver = PathResolver::new(vec![rpath]);
         let module = load_executable(executable.clone())?;
 
-        let target_executable_path = self.out_path.join(&relative);
+        let target_executable_path = self.out_path.join(relative);
         self.process_module(&target_executable_path, &module, &path_resolver)?;
         let has_local_dependencies = module.dependencies.iter().any(|d| !d.is_system());
         if has_local_dependencies {
@@ -252,7 +252,7 @@ impl SelfContained {
         let new_module_path =
             ModulePath::new(format!("@rpath/{}", relative_path.to_string_lossy()));
         if let Some(existing) = self.processed_libraries.get(&new_module_path) {
-            if !is_same(&resolved, &existing)? {
+            if !is_same(&resolved, existing)? {
                 return Err(ToolError::OtherError(format!(
                     "Trying to bundle two different version of single framework: {:?}, {:?}",
                     resolved, existing
@@ -263,7 +263,7 @@ impl SelfContained {
             debug!("Dependency {:?} - processing", relative_path);
             self.processed_libraries
                 .insert(new_module_path.clone(), resolved.clone());
-            let library = load_library(resolved.clone())?;
+            let library = load_library(resolved)?;
             let frameworks_path = self.out_path.join("Contents").join("Frameworks");
             fs::create_dir_all(&frameworks_path)
                 .wrap_error(FileOperation::MkDir, || frameworks_path.clone())?;
@@ -301,9 +301,7 @@ impl ModulePath {
     }
 
     pub fn is_system(&self) -> bool {
-        return self.0.starts_with("/usr/")
-            || self.0.starts_with("/lib/")
-            || self.0.starts_with("/System/");
+        self.0.starts_with("/usr/") || self.0.starts_with("/lib/") || self.0.starts_with("/System/")
     }
 }
 
@@ -334,7 +332,7 @@ impl<'a> PathResolver<'a> {
                     return Ok(replaced);
                 }
             }
-            Err(ToolError::PathResolveError {
+            Err(ToolError::PathResolve {
                 path: format!("{:?}", path),
                 rpaths: self.rpaths.iter().map(|p| p.into()).collect(),
             })
@@ -396,7 +394,7 @@ fn find_module_paths(path: &Path) -> ToolResult<Vec<ModulePath>> {
     let lines = run_command(cmd, "otool")?;
     let mut iter = lines.into_iter();
     iter.next();
-    iter.map(|f| extract_module_path(f)).collect()
+    iter.map(extract_module_path).collect()
 }
 
 fn extract_module_path(line: String) -> ToolResult<ModulePath> {
