@@ -1,5 +1,6 @@
 use std::{
     fs,
+    os::unix::prelude::MetadataExt,
     path::{Path, PathBuf},
 };
 
@@ -59,6 +60,22 @@ impl Universal {
         Self::process_dir(&self.options.paths_in, &self.options.out)
     }
 
+    // This is for checking whether binaries are same across all bundles, for which
+    // we assume already lipo-ed binary. This only checks file size, chance of binary
+    // having identical sized for different architecture is very low.
+    fn are_files_same(paths: &[PathBuf]) -> ToolResult<bool> {
+        let meta_data = paths
+            .iter()
+            .map(|p| {
+                p.metadata()
+                    .wrap_error(FileOperation::MetaData, || p.into())
+            })
+            .collect::<ToolResult<Vec<_>>>()?;
+        let mut sizes = meta_data.iter().map(|f| f.size());
+        let first_size = sizes.clone().next().unwrap();
+        Ok(sizes.all(|s| s == first_size))
+    }
+
     fn process_dir(paths_in: &[PathBuf], path_out: &Path) -> ToolResult<()> {
         let path = &paths_in[0];
         let paths_rest = &paths_in[1..];
@@ -99,7 +116,7 @@ impl Universal {
             } else if meta.is_dir() {
                 fs::create_dir(&dest).wrap_error(FileOperation::CreateDir, || dest.clone())?;
                 Self::process_dir(&paths, &dest)?;
-            } else if is_executable_binary(&path)? {
+            } else if is_executable_binary(&path)? && !Self::are_files_same(&paths)? {
                 let mut cmd = std::process::Command::new("lipo");
                 cmd.arg("-create");
                 cmd.args(&paths);
