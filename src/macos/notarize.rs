@@ -2,8 +2,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
-    thread::sleep,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use log::{debug, info, trace};
@@ -29,13 +28,19 @@ pub struct Options {
     #[clap(long)]
     password: String,
 
-    /// Team name used during notarization (optional)
-    #[clap(long)]
-    team: Option<String>,
+    /// Team identifier used during notarization
+    #[clap(long, alias = "team")]
+    team_id: String,
 }
 
 pub struct Notarize {
     options: Options,
+}
+
+#[derive(Debug)]
+struct NotarizationResult {
+    id: String,
+    status: String,
 }
 
 impl Notarize {
@@ -44,64 +49,59 @@ impl Notarize {
     }
 
     pub fn perform(self) -> ToolResult<()> {
-        let bundle_identifier = self.get_bundle_identifier()?;
         let temp_dir = self.temp_dir()?;
         let compressed_path = self.compress_bundle(&temp_dir)?;
         let now = Instant::now();
-        let id = self.notarize(&bundle_identifier, &compressed_path)?;
-        self.notarize_wait(&id)?;
+        let result = self.notarize(&compressed_path)?;
+        debug!("Notarization result ${:?}", result);
+        let log = self.fetch_log(&result.id)?;
+        info!("Notarization took {:#?}, log:\n{}", now.elapsed(), log);
+        if result.status.to_lowercase() != "accepted" {
+            return Err(ToolError::OtherError(format!(
+                "Notarization failed with status: {}",
+                result.status
+            )));
+        }
         self.staple()?;
-        info!("Notarization took {:#?}", now.elapsed());
         defer! {
             fs::remove_dir_all(&temp_dir).ok();
         }
         Ok(())
     }
 
-    fn get_bundle_identifier(&self) -> ToolResult<String> {
-        let info_plist = self.options.bundle_path.join("Contents").join("Info.plist");
-        let plist = plist::Value::from_file(&info_plist).wrap_error(|| Some(info_plist))?;
-        if let plist::Value::Dictionary(plist) = plist {
-            let identifier = plist.get("CFBundleIdentifier");
-            if let Some(plist::Value::String(identifier)) = identifier {
-                return Ok(identifier.into());
-            }
-        }
-        Err(ToolError::OtherError("Malformed info.plist".into()))
-    }
-
     // Returns notarization id
-    fn notarize(&self, bundle_identifier: &str, compressed_path: &Path) -> ToolResult<String> {
-        debug!("Submitting bundle for notarization ({})", bundle_identifier);
+    fn notarize(&self, compressed_path: &Path) -> ToolResult<NotarizationResult> {
+        debug!("Submitting bundle for notarization and waiting for response.");
 
         let mut command = Command::new("xcrun");
         command
-            .arg("altool")
-            .arg("--notarize-app")
-            .arg("--primary-bundle-id")
-            .arg(bundle_identifier)
-            .arg("-u")
+            .arg("notarytool")
+            .arg("submit")
+            .arg("--apple-id")
             .arg(&self.options.username)
-            .arg("-p")
+            .arg("--password")
             .arg(&self.options.password)
-            .arg("--file")
-            .arg(compressed_path)
+            .arg("--team-id")
+            .arg(&self.options.team_id)
             .arg("--output-format")
-            .arg("xml");
-        if let Some(team) = &self.options.team {
-            command.arg("--asc-provider").arg(team);
-        }
+            .arg("plist")
+            .arg("--wait")
+            .arg(compressed_path);
 
         let res = run_command(command, "xcrun")?.join("\n");
+
         let plist = plist::Value::from_reader_xml(res.as_bytes()).wrap_error(|| None)?;
         if let plist::Value::Dictionary(value) = plist {
-            let upload = value.get("notarization-upload");
-            if let Some(plist::Value::Dictionary(upload)) = upload {
-                let request = upload.get("RequestUUID");
-                if let Some(plist::Value::String(identifier)) = request {
-                    trace!("Bundle successfully submitted. RequestID: {}", identifier);
-                    return Ok(identifier.into());
-                }
+            let id = value.get("id");
+            let status = value.get("status");
+            if let (Some(plist::Value::String(id)), Some(plist::Value::String(status))) =
+                (id, status)
+            {
+                trace!("Bundle successfully submitted. RequestID: {}", id);
+                return Ok(NotarizationResult {
+                    id: id.clone(),
+                    status: status.clone(),
+                });
             }
         }
 
@@ -109,6 +109,23 @@ impl Notarize {
             "Malformed notarization response: {:}",
             res,
         )))
+    }
+
+    fn fetch_log(&self, id: &str) -> ToolResult<String> {
+        debug!("Fetching notarization log");
+        let mut command = Command::new("xcrun");
+        command
+            .arg("notarytool")
+            .arg("log")
+            .arg(id)
+            .arg("--apple-id")
+            .arg(&self.options.username)
+            .arg("--password")
+            .arg(&self.options.password)
+            .arg("--team-id")
+            .arg(&self.options.team_id);
+
+        Ok(run_command(command, "xcrun")?.join("\n"))
     }
 
     fn staple(&self) -> ToolResult<()> {
@@ -120,59 +137,6 @@ impl Notarize {
             .arg(&self.options.bundle_path);
         run_command(command, "xcrun")?;
         Ok(())
-    }
-
-    fn notarize_wait(&self, request_id: &str) -> ToolResult<()> {
-        debug!("Waiting for notarization...");
-        let mut attempt = 0;
-        loop {
-            sleep(Duration::from_secs(20));
-            let mut command = Command::new("xcrun");
-            command
-                .arg("altool")
-                .arg("--notarization-info")
-                .arg(request_id)
-                .arg("-u")
-                .arg(&self.options.username)
-                .arg("-p")
-                .arg(&self.options.password)
-                .arg("--output-format")
-                .arg("xml");
-            attempt += 1;
-            trace!("Polling for status (attempt {})", attempt);
-            let res = run_command(command, "xcrun")?.join("\n");
-            let plist = plist::Value::from_reader_xml(res.as_bytes()).wrap_error(|| None)?;
-            let (status, log) = Self::get_status_from_plist(&plist)?;
-            trace!("Status is '{}'", status);
-            if status == "invalid" {
-                return Err(ToolError::NotarizationFailure { log_file_url: log });
-            }
-            if status == "success" {
-                break;
-            }
-        }
-        Ok(())
-    }
-
-    fn get_status_from_plist(status: &plist::Value) -> ToolResult<(String, Option<String>)> {
-        if let plist::Value::Dictionary(value) = status {
-            let upload = value.get("notarization-info");
-            if let Some(plist::Value::Dictionary(upload)) = upload {
-                let request = upload.get("Status");
-                if let Some(plist::Value::String(status)) = request {
-                    return Ok((
-                        status.into(),
-                        upload
-                            .get("LogFileURL")
-                            .and_then(|v| v.as_string().map(|s| s.into())),
-                    ));
-                }
-            }
-        }
-        Err(ToolError::OtherError(format!(
-            "Malformed notarization status response: {:#?}",
-            status,
-        )))
     }
 
     fn temp_dir(&self) -> ToolResult<PathBuf> {
