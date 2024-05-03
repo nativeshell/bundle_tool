@@ -29,7 +29,7 @@ pub struct Options {
 pub struct SelfContained {
     options: Options,
     out_path: PathBuf,
-    executables: Vec<PathBuf>,
+    executables: Vec<(PathBuf, PathBuf)>,
     processed_libraries: HashMap<ModulePath, PathBuf>,
 }
 
@@ -108,7 +108,7 @@ impl SelfContained {
 
         let executable = self.executables.clone();
         for b in executable {
-            self.process_executable(&b)?;
+            self.process_executable(&b.0, &b.1)?;
         }
 
         Ok(())
@@ -174,7 +174,7 @@ impl SelfContained {
                     debug!("{:?}: copy", entry.path());
                 } else {
                     debug!("{:?}: copy binary", entry.path());
-                    self.executables.push(entry.path().clone())
+                    self.executables.push((entry.path().clone(), src_resolved))
                 }
                 continue;
             }
@@ -182,15 +182,18 @@ impl SelfContained {
         Ok(())
     }
 
-    fn process_executable(&mut self, executable: &Path) -> ToolResult<()> {
-        debug!("Processing executable: {:?}", executable);
+    fn process_executable(&mut self, executable: &Path, original: &Path) -> ToolResult<()> {
+        debug!(
+            "Processing executable: {:?} (original {:?})",
+            executable, original
+        );
         let relative = pathdiff::diff_paths(executable, &self.options.source_path).unwrap();
         let executable = executable
             .canonicalize()
             .wrap_error(FileOperation::Canonicalize, || executable.into())?;
         let rpath = executable.parent().unwrap();
         let path_resolver = PathResolver::new(vec![rpath]);
-        let module = load_executable(executable.clone())?;
+        let module = load_executable(executable.clone(), original)?;
 
         let target_executable_path = self.out_path.join(relative);
         self.process_module(&target_executable_path, &module, &path_resolver)?;
@@ -372,8 +375,8 @@ fn load_library(path: PathBuf) -> ToolResult<Library> {
     }
 }
 
-fn load_executable(path: PathBuf) -> ToolResult<Module> {
-    let paths = find_module_paths(&path)?;
+fn load_executable(path: PathBuf, original_path: &Path) -> ToolResult<Module> {
+    let mut paths = find_module_paths(&path)?;
 
     if paths.is_empty() {
         Err(ToolError::OtherError(format!(
@@ -381,6 +384,26 @@ fn load_executable(path: PathBuf) -> ToolResult<Module> {
             path
         )))
     } else {
+        // This depends on behavior from NativeShell artifact emitter, which places all native assets
+        // inside a "native_assets" folder in the same directory as the executable.
+        let original_path_parent = original_path.parent().unwrap();
+        let native_assets_path = original_path_parent.join("native_assets");
+        if native_assets_path.exists() {
+            for file in fs::read_dir(&native_assets_path)
+                .wrap_error(FileOperation::ReadDir, || native_assets_path.clone())?
+            {
+                let file = file.wrap_error(FileOperation::Read, || native_assets_path.clone())?;
+                let path = file.path();
+                let Some(stem) = path.file_stem() else {
+                    continue;
+                };
+                let framework_binary = file.path().join("Versions").join("A").join(stem);
+                if framework_binary.exists() {
+                    paths.push(ModulePath(framework_binary.to_string_lossy().into()));
+                }
+            }
+        }
+
         Ok(Module {
             path,
             dependencies: paths,
