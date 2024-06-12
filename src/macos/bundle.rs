@@ -262,6 +262,10 @@ impl SelfContained {
                 )));
             }
             trace!("Dependency {:?} - skipping", relative_path);
+        } else if relative_path.to_string_lossy().starts_with("libswift") {
+            // Do not try to process bundled swift libraries, they have @rpath references that are not
+            // present in the bundle.
+            debug!("Dependency {:?} - skipping", relative_path);
         } else {
             debug!("Dependency {:?} - processing", relative_path);
             self.processed_libraries
