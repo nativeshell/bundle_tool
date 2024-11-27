@@ -262,10 +262,6 @@ impl SelfContained {
                 )));
             }
             trace!("Dependency {:?} - skipping", relative_path);
-        } else if relative_path.to_string_lossy().starts_with("libswift") {
-            // Do not try to process bundled swift libraries, they have @rpath references that are not
-            // present in the bundle.
-            debug!("Dependency {:?} - skipping", relative_path);
         } else {
             debug!("Dependency {:?} - processing", relative_path);
             self.processed_libraries
@@ -291,7 +287,7 @@ impl SelfContained {
                 let mut cmd = Command::new("install_name_tool");
                 cmd.arg("-id")
                     .arg(&new_module_path.0)
-                    .arg(&frameworks_path.join(&relative_path));
+                    .arg(frameworks_path.join(&relative_path));
                 run_command(cmd, "install_name_tool")?;
             }
         }
@@ -308,7 +304,11 @@ impl ModulePath {
     }
 
     pub fn is_system(&self) -> bool {
-        self.0.starts_with("/usr/") || self.0.starts_with("/lib/") || self.0.starts_with("/System/")
+        self.0.starts_with("/usr/")
+            || self.0.starts_with("/lib/")
+            || self.0.starts_with("/System/")
+            // Ignore swift libraries except for libswift_Concurrency.dylib
+            || (self.0.starts_with("@rpath/libswift") && !self.0.ends_with("_Concurrency.dylib"))
     }
 }
 
@@ -417,7 +417,7 @@ fn load_executable(path: PathBuf, original_path: &Path) -> ToolResult<Module> {
 
 fn find_module_paths(path: &Path) -> ToolResult<Vec<ModulePath>> {
     let mut cmd = Command::new("otool");
-    cmd.arg("-L").arg(&path.to_string_lossy().to_string());
+    cmd.arg("-L").arg(path.to_string_lossy().to_string());
     let lines = run_command(cmd, "otool")?;
     let mut iter = lines.into_iter();
     iter.next();
