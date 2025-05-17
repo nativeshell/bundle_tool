@@ -22,6 +22,7 @@ pub enum FileOperation {
     Canonicalize,
     Command,
     Unarchive,
+    Metadata,
 }
 #[derive(Debug)]
 pub enum ToolError {

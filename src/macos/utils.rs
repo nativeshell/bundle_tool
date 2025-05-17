@@ -1,11 +1,12 @@
 use std::{fs::File, io::Read, path::Path};
 
-use is_executable::IsExecutable;
-
 use crate::error::{FileOperation, IOResultExt, ToolResult};
 
 pub(super) fn is_executable_binary(path: &Path) -> ToolResult<bool> {
-    if path.is_executable() {
+    let meta = path
+        .metadata()
+        .wrap_error(FileOperation::Metadata, || path.into())?;
+    if meta.len() > 4 {
         // Check for MACH-O magic
         let mut f = File::open(path).wrap_error(FileOperation::Open, || path.into())?;
         let mut start = [0; 4];
