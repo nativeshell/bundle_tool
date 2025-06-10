@@ -20,17 +20,17 @@ pub struct Options {
     /// the macos_bundle and macos_codesign commands
     bundle_path: PathBuf,
 
-    /// User name used during notarization
-    #[clap(long)]
-    username: String,
+    /// App Store Connect API key. File system path to the private key.
+    #[clap(long, required = true)]
+    key: String,
 
-    /// Password used during notarization
-    #[clap(long)]
-    password: String,
+    /// App Store Connect API Key ID. Usually 10 alphanumeric characters.
+    #[clap(long, required = true)]
+    key_id: String,
 
-    /// Team identifier used during notarization
-    #[clap(long, alias = "team")]
-    team_id: String,
+    #[clap(long, required = true)]
+    /// App Store Connect API Issuer ID. UUID format.
+    issuer: String,
 }
 
 pub struct Notarize {
@@ -77,12 +77,12 @@ impl Notarize {
         command
             .arg("notarytool")
             .arg("submit")
-            .arg("--apple-id")
-            .arg(&self.options.username)
-            .arg("--password")
-            .arg(&self.options.password)
-            .arg("--team-id")
-            .arg(&self.options.team_id)
+            .arg("--key")
+            .arg(&self.options.key)
+            .arg("--key-id")
+            .arg(&self.options.key_id)
+            .arg("--issuer")
+            .arg(&self.options.issuer)
             .arg("--output-format")
             .arg("plist")
             .arg("--wait")
@@ -118,12 +118,12 @@ impl Notarize {
             .arg("notarytool")
             .arg("log")
             .arg(id)
-            .arg("--apple-id")
-            .arg(&self.options.username)
-            .arg("--password")
-            .arg(&self.options.password)
-            .arg("--team-id")
-            .arg(&self.options.team_id);
+            .arg("--key")
+            .arg(&self.options.key)
+            .arg("--key-id")
+            .arg(&self.options.key_id)
+            .arg("--issuer")
+            .arg(&self.options.issuer);
 
         Ok(run_command(command, "xcrun")?.join("\n"))
     }
